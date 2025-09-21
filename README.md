@@ -2,8 +2,11 @@
 
 A sleek, terminal-based typing speed test built entirely in Bash. Challenge yourself, improve your WPM, and master the keyboard with this minimalist yet powerful typing tutor.
 
-![Typing Speed Test](https://img.shields.io/badge/Typing-Speed-Bash-blue?style=for-the-badge&logo=linux&logoColor=white)
 ![License](https://img.shields.io/badge/License-MIT-green?style=for-the-badge)
+
+## Demo
+
+![Demo](demo.gif)
 
 ## ✨ Features
 
