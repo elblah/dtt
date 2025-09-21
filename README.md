@@ -1,4 +1,4 @@
-# 🚀 DTT - Don't Type Too
+# 🚀 DTT - The Typing Test
 
 A sleek, terminal-based typing speed test built entirely in Bash. Challenge yourself, improve your WPM, and master the keyboard with this minimalist yet powerful typing tutor.
 
