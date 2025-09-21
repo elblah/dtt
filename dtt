@@ -1,0 +1,142 @@
+#!/bin/bash
+
+COLUMNS=$(tput cols)
+
+tput civis
+
+toggle_soe() {
+    [ "$STOPONERROR" = 1 ] && STOPONERROR=0 || STOPONERROR=1
+}
+trap toggle_soe SIGTSTP
+
+handle_exit() {
+    tput cnorm
+    if [ "${#res_points[@]}" = 0 ]; then
+        exit
+    fi
+    printf "${CLSLNS}\033[1A\033[K"
+    exec "$0"
+}
+trap handle_exit EXIT
+
+cwrong=$(tput setaf 1)
+cright=$(tput setaf 2)
+cnormal=$(tput op)
+
+clen=${#cwrong}
+
+NUMWORDS=${NUMWORDS:-15}
+STOPONERROR=${STOPONERROR:-0}
+
+# Get script directory for portable word list location
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Find word list in portable way
+if [ -z "$WORDSLIST" ]; then
+    # Check same directory as script first
+    if [ -f "$SCRIPT_DIR/1000-words.txt" ]; then
+        WORDSLIST="$SCRIPT_DIR/1000-words.txt"
+    # Check current directory
+    elif [ -f "./1000-words.txt" ]; then
+        WORDSLIST="./1000-words.txt"
+    # Fall back to system dictionary
+    elif [ -f "/usr/share/dict/words" ]; then
+        WORDSLIST="/usr/share/dict/words"
+    else
+        echo "Error: No word list found. Please create 1000-words.txt or set WORDSLIST environment variable."
+        exit 1
+    fi
+fi
+
+if [ ! -f "$WORDSLIST" ]; then
+    echo "Error: WORDSLIST '$WORDSLIST' not found. Using system dictionary..."
+    if [ -f "/usr/share/dict/words" ]; then
+        WORDSLIST="/usr/share/dict/words"
+    else
+        echo "Error: No word list available. Please create 1000-words.txt or set WORDSLIST environment variable."
+        exit 1
+    fi
+fi
+
+words=$(shuf -n 1000 "$WORDSLIST" | grep -v "'" \
+        | head -n${NUMWORDS} \
+        | tr "\n" " ")
+words=${words:0:-1} # removes trailing space
+words=${words,,*}   # to lowercase
+
+CLSLNS=$(python3 -c "import math; print('\033[1A\033[K' * math.ceil(${#words}/$COLUMNS))")
+
+total_chars=${#words}
+
+res_txt=()
+res_points=()
+
+echo ""
+
+IFS=''
+for (( i=0; i<$total_chars; i++ )); do
+    if [ -n "$HAS_ERROR" ]; then
+        curletter="\e[1;30;1;41m${words:$i:1}\e[0m"
+    else
+        curletter="\e[1;30;1;45m${words:$i:1}\e[0m"
+    fi
+    echo -e "${res_txt[*]}${curletter}${words:$i+1}"
+    read -n1 -s
+    if [ "$REPLY" = $'\e' ]; then
+        printf "${CLSLNS}\033[1A\033[K"
+        exec "$0"
+    elif [ "${#res_txt}" -gt 0 ] && [ "$REPLY" = $'\177' ] \
+        && [ "$STOPONERROR" != 1 ]; then
+        i=$(( $i - 2  ))
+        unset res_txt[-1]
+        unset res_points[-1]
+    else
+        [ -z "$ini" ] && ini=$EPOCHREALTIME
+        ch=${words:$i:1}
+        if [ "$ch" = "$REPLY" ]; then
+            let total_correct_chars++
+            res_points+=(1)
+            res_txt+=("${cright}${ch}${cnormal}")
+            unset HAS_ERROR
+        else
+            if [ "$STOPONERROR" != 1 ]; then
+                res_points+=(0)
+                res_txt+=("${cwrong}${ch}${cnormal}")
+            else
+                let i--
+                HAS_ERROR=1
+            fi
+        fi
+    fi
+    printf "$CLSLNS"
+done
+end=$EPOCHREALTIME
+
+total_correct_chars=0
+for i in ${res_points[@]}; do
+  let total_correct_chars+=$i
+done
+
+echo -e "${res_txt[*]}"
+
+elap=$(awk "BEGIN{ printf(\"%.3f\\n\", $end-$ini) }")
+cpm=$(awk "BEGIN{ printf(\"%.0f\\n\", $total_chars/(($end-$ini)/60)) }")
+cpmaccu=$(awk "BEGIN{ printf(\"%.0f\\n\", $total_correct_chars/(($end-$ini)/60)) }")
+wpm=$(awk "BEGIN{ printf(\"%.0f\\n\", $cpm/5) }")
+wpmaccu=$(awk "BEGIN{ printf(\"%.0f\\n\", $cpmaccu/5) }")
+accuracy=$(awk "BEGIN{ printf(\"%.2f\\n\", 100*($total_correct_chars/$total_chars)) }")
+
+echo ""
+echo "WPM:           $wpm"
+echo "CPM:           $cpm"
+echo ""
+echo "WPM accurate:  $wpmaccu"
+echo "CPM accurate:  $cpmaccu"
+echo ""
+echo "Accuracy:      ${accuracy}%"
+echo "Correct chars: $total_correct_chars / $total_chars"
+
+echo "Elap:          $elap seconds"
+echo ""
+
+exec "$0" 
